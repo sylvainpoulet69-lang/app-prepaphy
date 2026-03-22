@@ -1,5 +1,6 @@
 export const state = {
   activeAthleteId: "ath_youth_001",
+  activeScreen: "profile",
   athletes: [],
   developmentProfiles: [],
   physicalProfiles: [],
@@ -8,7 +9,9 @@ export const state = {
   sessions: [],
   readiness: [],
   feedbacks: [],
-  blocks: []
+  blocks: [],
+  currentSession: null,
+  feedbackResult: null
 };
 
 export function setState(partial) {

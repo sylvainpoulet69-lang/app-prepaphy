@@ -1,5 +1,11 @@
 const LOAD_ORDER = { low: 1, moderate: 2, high: 3, very_high: 4 };
 const LOAD_LABELS = ["low", "moderate", "high", "very_high"];
+const LOAD_TO_RPE_ANCHOR = {
+  low: 3,
+  moderate: 5,
+  high: 7,
+  very_high: 8
+};
 
 function getNumericLoad(value = "moderate") {
   return LOAD_ORDER[value] || LOAD_ORDER.moderate;
@@ -29,6 +35,51 @@ function getBlockLoadScore(block) {
   return (profileScore * 0.7) + (stressScore * 0.3);
 }
 
+function toPositiveNumber(value) {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) && numericValue > 0 ? numericValue : 0;
+}
+
+function getPlannedLoadAnchor(sessionPlan = {}) {
+  if (toPositiveNumber(sessionPlan.plannedInternalLoad)) {
+    return {
+      plannedInternalLoad: toPositiveNumber(sessionPlan.plannedInternalLoad),
+      source: "planned_internal_load"
+    };
+  }
+
+  const plannedDurationMin = toPositiveNumber(sessionPlan.expectedDurationMin);
+  const plannedRPE = toPositiveNumber(
+    sessionPlan.targetSessionRPE ??
+    sessionPlan.expectedSessionRPE ??
+    sessionPlan.plannedSessionRPE
+  );
+
+  if (plannedDurationMin && plannedRPE) {
+    return {
+      plannedInternalLoad: computeInternalLoad(plannedRPE, plannedDurationMin),
+      plannedSessionRPE: plannedRPE,
+      source: "planned_duration_x_rpe"
+    };
+  }
+
+  // V1 fallback: when the session only carries a qualitative load label,
+  // anchor comparison on a simple session-RPE estimate to keep the logic explainable.
+  if (plannedDurationMin && sessionPlan.expectedLoad) {
+    const anchoredRPE = LOAD_TO_RPE_ANCHOR[sessionPlan.expectedLoad] || LOAD_TO_RPE_ANCHOR.moderate;
+    return {
+      plannedInternalLoad: computeInternalLoad(anchoredRPE, plannedDurationMin),
+      plannedSessionRPE: anchoredRPE,
+      source: "expected_load_anchor"
+    };
+  }
+
+  return {
+    plannedInternalLoad: 0,
+    source: "missing_planned_load"
+  };
+}
+
 export function estimateLoad(sessionPlan, context = {}) {
   const blocks = sessionPlan.blocks || [];
   const durationMin = sessionPlan.expectedDurationMin || context.readiness?.availabilityMinutes || 60;
@@ -54,4 +105,43 @@ export function estimateLoad(sessionPlan, context = {}) {
   const boundedIndex = Math.max(0, Math.min(Math.round(sessionScore) - 1, LOAD_LABELS.length - 1));
 
   return LOAD_LABELS[boundedIndex];
+}
+
+export function computeInternalLoad(rpe, durationMin) {
+  const numericRPE = toPositiveNumber(rpe);
+  const numericDuration = toPositiveNumber(durationMin);
+
+  return numericRPE * numericDuration;
+}
+
+export function comparePlannedVsActualLoad(sessionPlan = {}, feedback = {}) {
+  const plannedLoad = getPlannedLoadAnchor(sessionPlan);
+  const actualDurationMin = toPositiveNumber(feedback.actualDurationMin);
+  const actualSessionRPE = toPositiveNumber(feedback.sessionRPE);
+  const actualInternalLoad = toPositiveNumber(feedback.internalLoad) || computeInternalLoad(actualSessionRPE, actualDurationMin);
+  const expectedInternalLoad = plannedLoad.plannedInternalLoad;
+  const delta = actualInternalLoad - expectedInternalLoad;
+  const deltaRatio = expectedInternalLoad > 0 ? delta / expectedInternalLoad : 0;
+
+  // V1 thresholds stay intentionally simple and conservative:
+  // within +/-15% of planned load = on target.
+  let status = "on_target";
+  if (expectedInternalLoad > 0 && deltaRatio > 0.15) {
+    status = "overload";
+  } else if (expectedInternalLoad > 0 && deltaRatio < -0.15) {
+    status = "underload";
+  }
+
+  return {
+    expectedInternalLoad,
+    actualInternalLoad,
+    delta,
+    deltaRatio,
+    status,
+    expectedDurationMin: toPositiveNumber(sessionPlan.expectedDurationMin),
+    actualDurationMin,
+    plannedSessionRPE: plannedLoad.plannedSessionRPE || 0,
+    actualSessionRPE,
+    source: plannedLoad.source
+  };
 }

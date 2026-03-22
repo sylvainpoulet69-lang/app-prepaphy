@@ -1,68 +1,78 @@
-export function getCandidateBlocks(goal, blockLibrary) {
-  const byObjective = {
-    acceleration: {
-      main: ["speed_acceleration_short"],
-      secondary: ["coordination_locomotor", "prevention_ankle_knee"],
-      transfer: ["tennis_movement_pattern"],
-      support: ["core_stability", "prevention_ankle_knee"]
-    },
-    max_speed: {
-      main: ["speed_max_velocity"],
-      secondary: ["coordination_locomotor"],
-      transfer: ["tennis_movement_pattern"],
-      support: ["core_stability", "prevention_ankle_knee"]
-    },
-    repeated_sprint: {
-      main: ["speed_rst"],
-      secondary: ["prevention_ankle_knee"],
-      transfer: ["tennis_movement_pattern"],
-      support: ["core_stability"]
-    },
-    aerobic_power: {
-      main: ["aerobic_hiit_short", "aerobic_intervals_medium"],
-      secondary: ["core_stability"],
-      transfer: [],
-      support: ["prevention_ankle_knee"]
-    },
-    power: {
-      main: ["strength_dynamic_power", "plyo_reactive_light"],
-      secondary: ["core_stability", "prevention_ankle_knee"],
-      transfer: ["tennis_movement_pattern"],
-      support: ["coordination_locomotor"]
-    },
-    force_general: {
-      main: ["strength_general_unilateral"],
-      secondary: ["core_stability", "prevention_ankle_knee"],
-      transfer: ["tennis_movement_pattern"],
-      support: ["coordination_locomotor"]
-    },
-    coordination: {
-      main: ["coordination_locomotor"],
-      secondary: ["prevention_ankle_knee"],
-      transfer: ["tennis_movement_pattern"],
-      support: ["core_stability"]
-    },
-    tennis_movement: {
-      main: ["tennis_movement_pattern"],
-      secondary: ["coordination_locomotor", "prevention_ankle_knee"],
-      transfer: ["tennis_constrained_play_light"],
-      support: ["core_stability"]
-    },
-    support_recovery: {
-      main: ["prevention_ankle_knee", "core_stability"],
-      secondary: ["coordination_locomotor"],
-      transfer: [],
-      support: []
-    }
-  };
+function uniqueById(blocks) {
+  const seen = new Set();
+  return blocks.filter((block) => {
+    if (!block || seen.has(block.id)) return false;
+    seen.add(block.id);
+    return true;
+  });
+}
 
-  const mapping = byObjective[goal.mainObjective] || byObjective.support_recovery;
-  const findBlocks = (ids) => blockLibrary.filter((b) => ids.includes(b.id));
+function filterByObjective(blockLibrary, objective) {
+  return blockLibrary.filter((block) => block.primaryObjective === objective);
+}
+
+function getRoleCompatibleMainCandidates(goal, blockLibrary) {
+  const exactObjectiveMatches = filterByObjective(blockLibrary, goal.mainObjective).filter(
+    (block) => block.sessionRole.canBePrimary
+  );
+
+  if (exactObjectiveMatches.length > 0) {
+    return exactObjectiveMatches;
+  }
+
+  // Recovery is special in V1 because support blocks are intentionally low-cost,
+  // even when they are not marked as primary blocks in the library.
+  if (goal.sessionRole === "recovery") {
+    return filterByObjective(blockLibrary, "support_recovery");
+  }
+
+  return [];
+}
+
+function getSecondaryCandidates(goal, blockLibrary, mainCandidates) {
+  const supportBlocks = filterByObjective(blockLibrary, "support_recovery").filter(
+    (block) => block.sessionRole.canBeSecondary
+  );
+  const coordinationBlocks = filterByObjective(blockLibrary, "coordination").filter(
+    (block) => block.sessionRole.canBeSecondary
+  );
+  const sameObjectiveSecondary = filterByObjective(blockLibrary, goal.mainObjective).filter(
+    (block) => block.sessionRole.canBeSecondary
+  );
+
+  const mainCandidateIds = new Set(mainCandidates.map((block) => block.id));
+
+  return uniqueById([...coordinationBlocks, ...sameObjectiveSecondary, ...supportBlocks]).filter(
+    (block) => !mainCandidateIds.has(block.id)
+  );
+}
+
+function getTransferCandidates(goal, blockLibrary) {
+  if (goal.sessionRole === "recovery") {
+    return [];
+  }
+
+  const transferBlocks = blockLibrary.filter((block) => block.sessionRole.canBeTransfer);
+
+  if (goal.sessionRole === "activation") {
+    return transferBlocks.filter((block) => block.family === "tennis_transfer");
+  }
+
+  return transferBlocks;
+}
+
+export function getCandidateBlocks(goal, blockLibrary) {
+  const mainCandidates = getRoleCompatibleMainCandidates(goal, blockLibrary);
+  const secondaryCandidates = getSecondaryCandidates(goal, blockLibrary, mainCandidates);
+  const transferCandidates = getTransferCandidates(goal, blockLibrary);
+  const supportCandidates = filterByObjective(blockLibrary, "support_recovery").filter(
+    (block) => block.sessionRole.canBeSecondary
+  );
 
   return {
-    mainCandidates: findBlocks(mapping.main),
-    secondaryCandidates: findBlocks(mapping.secondary),
-    transferCandidates: findBlocks(mapping.transfer),
-    supportCandidates: findBlocks(mapping.support)
+    mainCandidates,
+    secondaryCandidates,
+    transferCandidates,
+    supportCandidates
   };
 }

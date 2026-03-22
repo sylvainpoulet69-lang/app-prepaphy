@@ -7,66 +7,99 @@ function uniqueById(blocks) {
   });
 }
 
-function filterByObjective(blockLibrary, objective) {
-  return blockLibrary.filter((block) => block.primaryObjective === objective);
+function getRoleCapability(block, capability) {
+  return Boolean(block?.sessionRole?.[capability]);
 }
 
-function getRoleCompatibleMainCandidates(goal, blockLibrary) {
-  const exactObjectiveMatches = filterByObjective(blockLibrary, goal.mainObjective).filter(
-    (block) => block.sessionRole.canBePrimary
-  );
-
-  if (exactObjectiveMatches.length > 0) {
-    return exactObjectiveMatches;
+function isMainRoleEligible(block, goal) {
+  if (getRoleCapability(block, "canBePrimary")) {
+    return true;
   }
 
-  // Recovery is special in V1 because support blocks are intentionally low-cost,
-  // even when they are not marked as primary blocks in the library.
-  if (goal.sessionRole === "recovery") {
-    return filterByObjective(blockLibrary, "support_recovery");
-  }
-
-  return [];
+  return goal.sessionRole === "recovery" && block.primaryObjective === goal.mainObjective;
 }
 
-function getSecondaryCandidates(goal, blockLibrary, mainCandidates) {
-  const supportBlocks = filterByObjective(blockLibrary, "support_recovery").filter(
-    (block) => block.sessionRole.canBeSecondary
+function isBlockCompatiblePair(left, right) {
+  if (!left || !right) return false;
+
+  const leftAvoid = left.compatibility?.avoidWith || [];
+  const rightAvoid = right.compatibility?.avoidWith || [];
+
+  return !leftAvoid.includes(right.id) && !rightAvoid.includes(left.id);
+}
+
+function isSecondaryRelevant(block, goal, mainCandidates) {
+  if (!getRoleCapability(block, "canBeSecondary")) {
+    return false;
+  }
+
+  if (block.primaryObjective === goal.mainObjective) {
+    return true;
+  }
+
+  if ((block.secondaryObjectives || []).includes(goal.mainObjective)) {
+    return true;
+  }
+
+  return mainCandidates.some(
+    (mainBlock) =>
+      isBlockCompatiblePair(block, mainBlock) &&
+      (
+        (mainBlock.compatibility?.goodWith || []).includes(block.id) ||
+        (block.compatibility?.goodWith || []).includes(mainBlock.id)
+      )
   );
-  const coordinationBlocks = filterByObjective(blockLibrary, "coordination").filter(
-    (block) => block.sessionRole.canBeSecondary
+}
+
+function isTransferRelevant(block, mainCandidates) {
+  if (!getRoleCapability(block, "canBeTransfer")) {
+    return false;
+  }
+
+  if (!mainCandidates.length) {
+    return true;
+  }
+
+  return mainCandidates.some((mainBlock) => isBlockCompatiblePair(block, mainBlock));
+}
+
+function isLowCostSupportBlock(block) {
+  const freshnessCost = block.loadProfile?.freshnessCost;
+  const weeklyCost = block.loadProfile?.weeklyCost;
+  const internalLoad = block.loadProfile?.estimatedInternalLoad;
+
+  return getRoleCapability(block, "canBeSecondary") && [freshnessCost, weeklyCost, internalLoad].every(
+    (value) => value === "low" || value === undefined
   );
-  const sameObjectiveSecondary = filterByObjective(blockLibrary, goal.mainObjective).filter(
-    (block) => block.sessionRole.canBeSecondary
+}
+
+export function getCandidateBlocks(goal, blockLibrary) {
+  const mainCandidates = uniqueById(
+    blockLibrary.filter(
+      (block) => block.primaryObjective === goal.mainObjective && isMainRoleEligible(block, goal)
+    )
   );
 
   const mainCandidateIds = new Set(mainCandidates.map((block) => block.id));
 
-  return uniqueById([...coordinationBlocks, ...sameObjectiveSecondary, ...supportBlocks]).filter(
-    (block) => !mainCandidateIds.has(block.id)
+  const secondaryCandidates = uniqueById(
+    blockLibrary.filter(
+      (block) => !mainCandidateIds.has(block.id) && isSecondaryRelevant(block, goal, mainCandidates)
+    )
   );
-}
 
-function getTransferCandidates(goal, blockLibrary) {
-  if (goal.sessionRole === "recovery") {
-    return [];
-  }
+  const transferCandidates = goal.sessionRole === "recovery"
+    ? []
+    : uniqueById(
+      blockLibrary.filter(
+        (block) => !mainCandidateIds.has(block.id) && isTransferRelevant(block, mainCandidates)
+      )
+    );
 
-  const transferBlocks = blockLibrary.filter((block) => block.sessionRole.canBeTransfer);
-
-  if (goal.sessionRole === "activation") {
-    return transferBlocks.filter((block) => block.family === "tennis_transfer");
-  }
-
-  return transferBlocks;
-}
-
-export function getCandidateBlocks(goal, blockLibrary) {
-  const mainCandidates = getRoleCompatibleMainCandidates(goal, blockLibrary);
-  const secondaryCandidates = getSecondaryCandidates(goal, blockLibrary, mainCandidates);
-  const transferCandidates = getTransferCandidates(goal, blockLibrary);
-  const supportCandidates = filterByObjective(blockLibrary, "support_recovery").filter(
-    (block) => block.sessionRole.canBeSecondary
+  const supportCandidates = uniqueById(
+    blockLibrary.filter(
+      (block) => !mainCandidateIds.has(block.id) && isLowCostSupportBlock(block)
+    )
   );
 
   return {

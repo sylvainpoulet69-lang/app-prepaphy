@@ -123,7 +123,7 @@ function isEventRestricted(block, upcomingEvent, daysUntilEvent) {
   if (!upcomingEvent || daysUntilEvent === null) return false;
 
   const allowance = getCompetitionAllowance(block);
-  if (daysUntilEvent > allowance) {
+  if (!Number.isFinite(allowance) || daysUntilEvent > allowance) {
     return false;
   }
 

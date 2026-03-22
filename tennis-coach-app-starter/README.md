@@ -85,3 +85,11 @@ Elle doit toujours raisonner ainsi :
 - nombre de séances ≠ charge
 - charge réelle = coût des contraintes + durée + densité + RPE
 - physique -> transfert -> tennis
+
+
+## Limites V1
+
+- V1 fonctionne uniquement avec les données de démonstration chargées au démarrage.
+- Aucun backend, aucune persistance et aucun flux multi-athlète complet ne sont ajoutés dans cette version.
+- Les indicateurs de semaine et de charge restent volontairement simples pour garder le moteur explicable et testable.
+- Le feedback met à jour la semaine en mémoire uniquement pour la session courante du navigateur.

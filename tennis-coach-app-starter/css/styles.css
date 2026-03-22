@@ -9,6 +9,8 @@
   --accent: #7cc6ff;
   --accent-strong: #3fa3ff;
   --success: #86efac;
+  --warning: #ffd9a0;
+  --danger: #fda4af;
 }
 
 * {
@@ -18,6 +20,7 @@
 body {
   margin: 0;
   font-family: Arial, sans-serif;
+  line-height: 1.5;
   background: linear-gradient(180deg, #08111f 0%, #0b1324 100%);
   color: var(--text);
 }
@@ -57,11 +60,13 @@ textarea {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 16px;
-  padding: 18px;
+  padding: 20px;
 }
 
 .page-header,
-.action-card {
+.action-card,
+.phase-card-header,
+.metric-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -92,6 +97,7 @@ textarea {
   padding: 12px 14px;
   cursor: pointer;
   text-align: left;
+  transition: border-color 0.15s ease, background 0.15s ease, opacity 0.15s ease;
 }
 
 .nav-button.is-active,
@@ -104,8 +110,13 @@ textarea {
   font-weight: 700;
 }
 
+.primary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .nav-button:hover,
-.primary-button:hover {
+.primary-button:hover:not(:disabled) {
   border-color: var(--accent);
 }
 
@@ -124,8 +135,10 @@ textarea {
 h1,
 h2,
 h3,
+h4,
 p,
-ul {
+ul,
+ol {
   margin-top: 0;
 }
 
@@ -133,7 +146,8 @@ h1 {
   margin-bottom: 8px;
 }
 
-.badge {
+.badge,
+.tag {
   display: inline-flex;
   align-items: center;
   padding: 8px 12px;
@@ -142,20 +156,44 @@ h1 {
   border: 1px solid rgba(124, 198, 255, 0.25);
 }
 
-.header-badges {
+.subtle-badge {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.header-badges,
+.tag-list,
+.session-summary-grid,
+.metric-split {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
 }
 
+.tag-list {
+  margin-top: 10px;
+}
+
+.priority-tags .tag {
+  background: rgba(134, 239, 172, 0.1);
+  border-color: rgba(134, 239, 172, 0.25);
+}
+
+.compact-tags .tag,
+.compact-list li {
+  font-size: 14px;
+}
+
 .simple-list,
-.phase-list {
+.phase-list,
+.explanation-list {
   padding-left: 18px;
   margin-bottom: 0;
 }
 
 .phase-list li,
-.simple-list li {
+.simple-list li,
+.explanation-list li {
   margin-bottom: 8px;
 }
 
@@ -168,6 +206,48 @@ h1 {
 .sidebar-summary p:last-child,
 .result-panel p:last-child,
 .card p:last-child {
+  margin-bottom: 0;
+}
+
+.empty-state,
+.notice,
+.metric-card,
+.phase-card {
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.empty-state {
+  border: 1px dashed rgba(178, 189, 210, 0.3);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.empty-state h4 {
+  margin-bottom: 8px;
+}
+
+.empty-state-action {
+  margin-top: 10px;
+}
+
+.notice {
+  border: 1px solid rgba(124, 198, 255, 0.25);
+  background: rgba(124, 198, 255, 0.08);
+}
+
+.notice-warning {
+  border-color: rgba(255, 217, 160, 0.35);
+  background: rgba(255, 217, 160, 0.08);
+}
+
+.notice-success {
+  border-color: rgba(134, 239, 172, 0.3);
+  background: rgba(134, 239, 172, 0.08);
+}
+
+.notice p:last-child,
+.metric-card p:last-child,
+.phase-card p:last-child {
   margin-bottom: 0;
 }
 
@@ -187,7 +267,8 @@ td {
   border-bottom: 1px solid var(--border);
 }
 
-.feedback-form {
+.feedback-form,
+.phase-stack {
   display: grid;
   gap: 14px;
 }
@@ -207,6 +288,19 @@ textarea {
   padding: 10px 12px;
 }
 
+input:focus,
+select:focus,
+textarea:focus,
+button:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+
+.form-errors {
+  display: grid;
+  gap: 10px;
+}
+
 .result-panel {
   border-radius: 12px;
   border: 1px solid rgba(134, 239, 172, 0.25);
@@ -215,12 +309,44 @@ textarea {
 }
 
 .warning-list {
-  color: #ffd9a0;
+  color: var(--warning);
+}
+
+.metric-card,
+.phase-card {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.progress-track {
+  margin-top: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.progress-bar {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--accent-strong));
+}
+
+.session-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+}
+
+.limitations-panel {
+  margin-top: 8px;
 }
 
 @media (max-width: 960px) {
   .app-shell,
-  .two-columns {
+  .two-columns,
+  .session-summary-grid {
     grid-template-columns: 1fr;
   }
 
@@ -229,7 +355,9 @@ textarea {
   }
 
   .page-header,
-  .action-card {
+  .action-card,
+  .phase-card-header,
+  .metric-row {
     align-items: flex-start;
     flex-direction: column;
   }

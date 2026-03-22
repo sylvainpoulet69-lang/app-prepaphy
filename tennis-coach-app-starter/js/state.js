@@ -11,7 +11,9 @@ export const state = {
   feedbacks: [],
   blocks: [],
   currentSession: null,
-  feedbackResult: null
+  feedbackResult: null,
+  generationStatus: null,
+  feedbackStatus: null
 };
 
 export function setState(partial) {
